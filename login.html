@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ログインページ</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="auth-card">
+        <div class="logo">login</div>
+        <form action="/login" method="POST" class="auth-form">
+          <label class="sr-only" for="ID">User:ID</label>
+          <input id="ID" name="ID" type="text" placeholder="User:ID" required />
+
+          <label class="sr-only" for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            placeholder="Password"
+            required
+          />
+
+          <button type="submit" class="btn-login">ログイン</button>
+        </form>
+        <div
+          id="login-error"
+          style="color: #b00020; margin-top: 8px; display: none"
+          </div>
+          <footer class="site-footer">名前: [氏名をここに] &nbsp;|&nbsp; 学籍番号: [学籍番号をここに]</footer>
+        </div>
+      </div>
+    </div>
+    <script>
+      // シンプルなクライアント認証: ID を sessionStorage に保存して遷移
+      (function () {
+        const form = document.querySelector(".auth-form");
+        const idInput = document.getElementById("ID");
+        const err = document.getElementById("login-error");
+
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const id = idInput.value && idInput.value.trim();
+          if (!id) {
+            err.textContent = "ID を入力してください。";
+            err.style.display = "block";
+            return;
+          }
+          // ログイン成功扱い -> sessionStorage に保存
+          sessionStorage.setItem("userID", id);
+          // 商品登録ページへ遷移
+          location.href = "shouhintouroku.html";
+        });
+      })();
+    </script>
+    <script src="auth.js"></script>
+  </body>
+</html>

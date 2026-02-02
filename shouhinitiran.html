@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>商品一覧</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page product-page">
+      <nav class="site-nav">
+        <div class="nav-inner">
+          <a href="shouhintouroku.html">商品登録</a>
+          <a href="shouhinitiran.html">商品一覧</a>
+          <a href="tyuumonitiran.html">注文一覧</a>
+        </div>
+      </nav>
+
+      <div class="product-card">
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+          "
+        >
+          <h1 class="card-title">登録商品一覧</h1>
+          <div>
+            <a
+              href="shouhintouroku.html"
+              class="btn-login"
+              style="display: inline-block; padding: 8px 12px"
+              >新規登録</a
+            >
+          </div>
+        </div>
+
+        <div id="empty" style="color: #6b7980; margin-top: 8px">
+          まだ商品が登録されていません。
+        </div>
+
+        <div id="list" class="product-list" style="margin-top: 14px"></div>
+      </div>
+    </div>
+
+    <script>
+      const key = "products";
+      const ordersKey = "orders";
+      function load() {
+        const raw = localStorage.getItem(key);
+        const arr = raw ? JSON.parse(raw) : [];
+        return arr;
+      }
+
+      function save(arr) {
+        localStorage.setItem(key, JSON.stringify(arr));
+      }
+
+      function render() {
+        const list = document.getElementById("list");
+        const empty = document.getElementById("empty");
+        const items = load();
+        list.innerHTML = "";
+        if (!items.length) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+
+        // 表形式で表示
+        const table = document.createElement("table");
+        table.className = "prod-table";
+        const thead = document.createElement("thead");
+        thead.innerHTML =
+          "<tr><th>画像</th><th>商品名</th><th>金額</th><th>説明</th><th>在庫</th><th>操作</th></tr>";
+        table.appendChild(thead);
+        const tbody = document.createElement("tbody");
+
+        items.forEach((item) => {
+          const tr = document.createElement("tr");
+
+          const tdImg = document.createElement("td");
+          if (item.image) {
+            const img = document.createElement("img");
+            img.src = item.image;
+            img.alt = item.name;
+            img.className = "prod-thumb-small";
+            tdImg.appendChild(img);
+          } else {
+            tdImg.textContent = "No Image";
+          }
+
+          const tdName = document.createElement("td");
+          tdName.textContent = item.name;
+
+          const tdPrice = document.createElement("td");
+          tdPrice.textContent = "¥" + item.price;
+
+          const tdDesc = document.createElement("td");
+          tdDesc.textContent = item.description || "";
+
+          const tdStock = document.createElement("td");
+          tdStock.textContent = item.stock;
+
+          const tdOps = document.createElement("td");
+          tdOps.className = "prod-actions";
+          // 購入ボタン
+          const btnBuy = document.createElement("button");
+          btnBuy.className = "btn-action";
+          btnBuy.textContent = "購入";
+          btnBuy.addEventListener("click", () => {
+            const user = sessionStorage.getItem("userID") || "ゲスト";
+            const qtyStr = prompt("購入数を入力してください（半角数字）", "1");
+            if (qtyStr === null) return; // キャンセル
+            const qty = Number(qtyStr) || 0;
+            if (qty <= 0) {
+              alert("有効な購入数を入力してください。");
+              return;
+            }
+            const products = load();
+            const p = products.find((pp) => pp.id === item.id);
+            if (!p) {
+              alert("商品が見つかりません。");
+              return;
+            }
+            if (Number(p.stock) < qty) {
+              alert("在庫が不足しています。現在の在庫: " + p.stock);
+              return;
+            }
+
+            // 在庫を減らす
+            p.stock = Number(p.stock) - qty;
+            save(products);
+
+            // 注文を作成して orders に保存
+            const ordersRaw = localStorage.getItem(ordersKey) || "[]";
+            const orders = JSON.parse(ordersRaw);
+            const order = {
+              id: Date.now(),
+              customer: user,
+              items: [{ id: p.id, name: p.name, price: p.price, qty: qty }],
+              total: Number(p.price) * qty,
+              status: "pending",
+              createdAt: Date.now(),
+            };
+            orders.unshift(order);
+            localStorage.setItem(ordersKey, JSON.stringify(orders));
+
+            alert("購入を受け付けました。注文一覧へ移動します。");
+            render();
+            location.href = "tyuumonitiran.html";
+          });
+          const btnEdit = document.createElement("button");
+          btnEdit.className = "btn-action";
+          btnEdit.textContent = "編集";
+          btnEdit.addEventListener("click", () => {
+            alert("編集機能は未実装です");
+          });
+          const btnDel = document.createElement("button");
+          btnDel.className = "btn-delete";
+          btnDel.textContent = "削除";
+          btnDel.addEventListener("click", () => {
+            if (!confirm("この商品を削除しますか？")) return;
+            const arr = load().filter((p) => p.id !== item.id);
+            save(arr);
+            render();
+          });
+          tdOps.appendChild(btnBuy);
+          tdOps.appendChild(btnEdit);
+          tdOps.appendChild(btnDel);
+
+          tr.appendChild(tdImg);
+          tr.appendChild(tdName);
+          tr.appendChild(tdPrice);
+          tr.appendChild(tdDesc);
+          tr.appendChild(tdStock);
+          tr.appendChild(tdOps);
+
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        list.appendChild(table);
+      }
+
+      function escapeHtml(s) {
+        return (s + "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      render();
+    </script>
+    <script src="auth.js"></script>
+  </body>
+</html>

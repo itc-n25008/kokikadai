@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>注文一覧</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page product-page">
+      <nav class="site-nav">
+        <div class="nav-inner">
+          <a href="shouhintouroku.html">商品登録</a>
+          <a href="shouhinitiran.html">商品一覧</a>
+          <a href="tyuumonitiran.html">注文一覧</a>
+        </div>
+      </nav>
+      <div class="product-card">
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+          "
+        >
+          <h1 class="card-title">注文一覧</h1>
+          <div>
+            <a
+              href="shouhintouroku.html"
+              class="btn-login"
+              style="display: inline-block; padding: 8px 12px"
+              >商品登録</a
+            >
+            <!-- ダミー注文ボタンは削除しました -->
+          </div>
+        </div>
+
+        <div id="empty-orders" style="color: #6b7980; margin-top: 8px">
+          まだ注文がありません。
+        </div>
+
+        <div id="orders" class="order-list" style="margin-top: 14px"></div>
+      </div>
+    </div>
+
+    <script>
+      const key = "orders";
+      const pKey = "products";
+      function load() {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : [];
+      }
+      function save(a) {
+        localStorage.setItem(key, JSON.stringify(a));
+      }
+
+      function formatDate(ts) {
+        const d = new Date(ts);
+        return d.toLocaleString();
+      }
+
+      function render() {
+        const container = document.getElementById("orders");
+        const empty = document.getElementById("empty-orders");
+        const list = load();
+        container.innerHTML = "";
+        if (!list.length) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+
+        list.forEach((order) => {
+          const el = document.createElement("div");
+          el.className = "order-item";
+
+          const left = document.createElement("div");
+          left.className = "order-left";
+
+          const meta = document.createElement("div");
+          meta.className = "order-meta";
+          meta.innerHTML = `<div class=\"order-id\">注文ID: ${order.id}</div>
+                            <div class=\"order-customer\">顧客: ${escapeHtml(order.customer || "---")}</div>
+                            <div class=\"order-time\">日時: ${formatDate(order.createdAt)}</div>`;
+
+          const items = document.createElement("div");
+          items.className = "order-items";
+          items.innerHTML = order.items
+            .map((it) => {
+              const name = escapeHtml(it.name || "不明");
+              return `<div class=\"oi\">${name} × ${it.qty}  <span class=\"oi-price\">¥${it.price}</span></div>`;
+            })
+            .join("");
+
+          left.appendChild(meta);
+          left.appendChild(items);
+
+          const right = document.createElement("div");
+          right.className = "order-right";
+
+          const total = document.createElement("div");
+          total.className = "order-total";
+          total.textContent =
+            "合計: ¥" + (order.total || calcTotal(order.items));
+
+          const status = document.createElement("div");
+          status.className = "order-status " + (order.status || "pending");
+          status.textContent = (order.status || "pending").toUpperCase();
+
+          const actions = document.createElement("div");
+          actions.className = "order-actions";
+
+          const btnShip = document.createElement("button");
+          btnShip.className = "btn-action";
+          btnShip.textContent = "発送済みにする";
+          btnShip.addEventListener("click", () => {
+            order.status = "shipped";
+            saveState(order.id, order);
+            render();
+          });
+
+          const btnCancel = document.createElement("button");
+          btnCancel.className = "btn-action";
+          btnCancel.textContent = "キャンセル";
+          btnCancel.addEventListener("click", () => {
+            if (!confirm("この注文をキャンセルしますか？")) return;
+            order.status = "cancelled";
+            saveState(order.id, order);
+            render();
+          });
+
+          const btnDel = document.createElement("button");
+          btnDel.className = "btn-delete";
+          btnDel.textContent = "削除";
+          btnDel.addEventListener("click", () => {
+            if (!confirm("この注文を削除しますか？")) return;
+            const arr = load().filter((o) => o.id !== order.id);
+            save(arr);
+            render();
+          });
+
+          actions.appendChild(btnShip);
+          actions.appendChild(btnCancel);
+          actions.appendChild(btnDel);
+
+          right.appendChild(total);
+          right.appendChild(status);
+          right.appendChild(actions);
+
+          el.appendChild(left);
+          el.appendChild(right);
+
+          container.appendChild(el);
+        });
+      }
+
+      function calcTotal(items) {
+        return items.reduce(
+          (s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0),
+          0,
+        );
+      }
+
+      function saveState(id, newOrder) {
+        const arr = load().map((o) => (o.id === id ? newOrder : o));
+        save(arr);
+      }
+
+      function escapeHtml(s) {
+        return (s + "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      // ページ読み込み時に既存のダミー注文（テスト用）をクリーンアップする
+      (function removeDummyOrders() {
+        const raw = localStorage.getItem(key) || "[]";
+        let arr = JSON.parse(raw);
+        const filtered = arr.filter(
+          (o) => !(o && o.customer && /テスト/.test(String(o.customer))),
+        );
+        if (filtered.length !== arr.length) {
+          localStorage.setItem(key, JSON.stringify(filtered));
+          arr = filtered;
+        }
+      })();
+
+      render();
+    </script>
+    <script src="auth.js"></script>
+  </body>
+</html>

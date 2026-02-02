@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>商品登録</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page product-page">
+      <nav class="site-nav">
+        <div class="nav-inner">
+          <a href="shouhintouroku.html">商品登録</a>
+          <a href="shouhinitiran.html">商品一覧</a>
+          <a href="tyuumonitiran.html">注文一覧</a>
+        </div>
+      </nav>
+      <div class="product-card">
+        <h1 class="card-title">商品登録</h1>
+
+        <form
+          class="product-form"
+          action="/products"
+          method="POST"
+          enctype="multipart/form-data"
+        >
+          <div class="form-row">
+            <label for="name">商品名</label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              placeholder="例：カレー"
+              required
+            />
+          </div>
+
+          <div class="form-row">
+            <label for="category">カテゴリ</label>
+            <select id="category" name="category">
+              <option value="food">食べ物</option>
+              <option value="drink">飲み物</option>
+              <option value="gift">ギフト</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+
+          <div class="form-row two-cols">
+            <div>
+              <label for="price">価格（円）</label>
+              <input
+                id="price"
+                name="price"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="例：1200"
+                required
+              />
+            </div>
+            <div>
+              <label for="stock">在庫数</label>
+              <input
+                id="stock"
+                name="stock"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="例：10"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="description">説明</label>
+            <textarea
+              id="description"
+              name="description"
+              rows="4"
+              placeholder="商品の説明を入力してください"
+            ></textarea>
+          </div>
+
+          <div class="form-row">
+            <label for="image">商品画像</label>
+            <input id="image" name="image" type="file" accept="image/*" />
+            <div id="preview" class="image-preview" aria-hidden="true"></div>
+          </div>
+
+          <div class="form-row">
+            <button type="submit" class="btn-login">登録する</button>
+            <a href="login.html" class="forgot" style="margin-left: 12px"
+              >キャンセル</a
+            >
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // 画像プレビュー
+      const imageInput = document.getElementById("image");
+      const preview = document.getElementById("preview");
+
+      imageInput &&
+        imageInput.addEventListener("change", (e) => {
+          preview.innerHTML = "";
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          if (!file.type.startsWith("image/")) return;
+          const img = document.createElement("img");
+          img.style.maxWidth = "100%";
+          img.style.maxHeight = "200px";
+          img.alt = "image preview";
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+          preview.appendChild(img);
+        });
+
+      // フォームをローカルに保存して一覧へリダイレクト
+      const form = document.querySelector(".product-form");
+
+      function fileToDataURL(file) {
+        return new Promise((resolve, reject) => {
+          if (!file) return resolve(null);
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+      }
+
+      form &&
+        form.addEventListener("submit", async (ev) => {
+          ev.preventDefault();
+          const name = document.getElementById("name").value.trim();
+          const category = document.getElementById("category").value;
+          const price = Number(document.getElementById("price").value) || 0;
+          const stock = Number(document.getElementById("stock").value) || 0;
+          const description = document
+            .getElementById("description")
+            .value.trim();
+          const file = document.getElementById("image").files[0];
+          const imageData = await fileToDataURL(file);
+
+          const product = {
+            id: Date.now(),
+            name,
+            category,
+            price,
+            stock,
+            description,
+            image: imageData,
+          };
+
+          const key = "products";
+          const list = JSON.parse(localStorage.getItem(key) || "[]");
+          list.unshift(product);
+          localStorage.setItem(key, JSON.stringify(list));
+
+          // 登録後は商品登録ページに戻る
+          location.href = "shouhintouroku.html";
+        });
+    </script>
+    <script src="auth.js"></script>
+  </body>
+</html>
