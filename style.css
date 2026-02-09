@@ -577,6 +577,14 @@ input[type="password"]:focus {
   gap: 8px;
 }
 
+/* カートテーブルの微調整 */
+.cart-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
 /* フッター */
 .site-footer {
   max-width: 1000px;

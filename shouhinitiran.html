@@ -12,6 +12,7 @@
         <div class="nav-inner">
           <a href="shouhintouroku.html">商品登録</a>
           <a href="shouhinitiran.html">商品一覧</a>
+          <a href="cart.html">カート</a>
           <a href="tyuumonitiran.html">注文一覧</a>
         </div>
       </nav>
@@ -44,9 +45,19 @@
       </div>
     </div>
 
+    <script src="idb-images.js"></script>
     <script>
+      // 管理ページ：ログイン必須
+      (function requireLogin() {
+        const id = sessionStorage.getItem("userID");
+        if (!id) {
+          location.href = "login.html";
+        }
+      })();
+
       const key = "products";
       const ordersKey = "orders";
+      const cartKey = "cart";
       function load() {
         const raw = localStorage.getItem(key);
         const arr = raw ? JSON.parse(raw) : [];
@@ -81,12 +92,18 @@
           const tr = document.createElement("tr");
 
           const tdImg = document.createElement("td");
-          if (item.image) {
-            const img = document.createElement("img");
+          const img = document.createElement("img");
+          img.className = "prod-thumb-small";
+          img.alt = item.name || "";
+          tdImg.appendChild(img);
+          // 画像が IndexedDB の imageId を指している場合は取得して表示
+          if (item.imageId) {
+            ImageDB.getURL(item.imageId).then((url) => {
+              if (url) img.src = url;
+            }).catch(() => {});
+          } else if (item.image) {
+            // 旧方式の base64 に対応
             img.src = item.image;
-            img.alt = item.name;
-            img.className = "prod-thumb-small";
-            tdImg.appendChild(img);
           } else {
             tdImg.textContent = "No Image";
           }
@@ -105,63 +122,55 @@
 
           const tdOps = document.createElement("td");
           tdOps.className = "prod-actions";
-          // 購入ボタン
+          // カートに追加ボタン
           const btnBuy = document.createElement("button");
           btnBuy.className = "btn-action";
-          btnBuy.textContent = "購入";
+          btnBuy.textContent = "カートに追加";
           btnBuy.addEventListener("click", () => {
-            const user = sessionStorage.getItem("userID") || "ゲスト";
-            const qtyStr = prompt("購入数を入力してください（半角数字）", "1");
-            if (qtyStr === null) return; // キャンセル
+            const qtyStr = prompt("追加する数量を入力してください（半角数字）", "1");
+            if (qtyStr === null) return;
             const qty = Number(qtyStr) || 0;
             if (qty <= 0) {
-              alert("有効な購入数を入力してください。");
+              alert("有効な数量を入力してください。");
               return;
             }
             const products = load();
             const p = products.find((pp) => pp.id === item.id);
-            if (!p) {
-              alert("商品が見つかりません。");
-              return;
+            if (!p) return alert("商品が見つかりません。");
+            if (Number(p.stock) < qty) return alert("在庫が不足しています。現在の在庫: " + p.stock);
+
+            const cartRaw = localStorage.getItem(cartKey) || "[]";
+            const cart = JSON.parse(cartRaw);
+            const existing = cart.find((c) => c.id === p.id);
+            if (existing) {
+              existing.qty = Number(existing.qty) + qty;
+            } else {
+              cart.push({ id: p.id, name: p.name, price: p.price, qty: qty });
             }
-            if (Number(p.stock) < qty) {
-              alert("在庫が不足しています。現在の在庫: " + p.stock);
-              return;
-            }
-
-            // 在庫を減らす
-            p.stock = Number(p.stock) - qty;
-            save(products);
-
-            // 注文を作成して orders に保存
-            const ordersRaw = localStorage.getItem(ordersKey) || "[]";
-            const orders = JSON.parse(ordersRaw);
-            const order = {
-              id: Date.now(),
-              customer: user,
-              items: [{ id: p.id, name: p.name, price: p.price, qty: qty }],
-              total: Number(p.price) * qty,
-              status: "pending",
-              createdAt: Date.now(),
-            };
-            orders.unshift(order);
-            localStorage.setItem(ordersKey, JSON.stringify(orders));
-
-            alert("購入を受け付けました。注文一覧へ移動します。");
-            render();
-            location.href = "tyuumonitiran.html";
+            localStorage.setItem(cartKey, JSON.stringify(cart));
+            alert("カートに追加しました。");
           });
           const btnEdit = document.createElement("button");
           btnEdit.className = "btn-action";
           btnEdit.textContent = "編集";
           btnEdit.addEventListener("click", () => {
-            alert("編集機能は未実装です");
+            // 編集ページへ遷移（クエリに id を付与）
+            location.href = `shouhintouroku.html?id=${item.id}`;
           });
           const btnDel = document.createElement("button");
           btnDel.className = "btn-delete";
           btnDel.textContent = "削除";
-          btnDel.addEventListener("click", () => {
+          btnDel.addEventListener("click", async () => {
             if (!confirm("この商品を削除しますか？")) return;
+            try {
+              // 削除前に画像が IndexedDB にあれば削除
+              if (item.imageId) {
+                await ImageDB.deleteImage(item.imageId).catch(() => {});
+              }
+            } catch (err) {
+              // 画像削除失敗はログに残すが削除自体は続行
+              console.error("failed to delete image", err);
+            }
             const arr = load().filter((p) => p.id !== item.id);
             save(arr);
             render();

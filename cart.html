@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>カート</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page product-page">
+      <nav class="site-nav">
+        <div class="nav-inner">
+          <a href="shouhintouroku.html">商品登録</a>
+          <a href="shouhinitiran.html">商品一覧</a>
+          <a href="cart.html">カート</a>
+          <a href="tyuumonitiran.html">注文一覧</a>
+        </div>
+      </nav>
+
+      <div class="product-card">
+        <h1 class="card-title">カート</h1>
+        <div id="empty-cart" style="color:#6b7980; margin-top:8px">カートに商品がありません。</div>
+        <div id="cart-list" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <script src="idb-images.js"></script>
+    <script>
+      const cartKey = "cart";
+      const prodKey = "products";
+      const ordersKey = "orders";
+
+      function loadCart() {
+        return JSON.parse(localStorage.getItem(cartKey) || "[]");
+      }
+      function saveCart(a) {
+        localStorage.setItem(cartKey, JSON.stringify(a));
+      }
+
+      function loadProds() {
+        return JSON.parse(localStorage.getItem(prodKey) || "[]");
+      }
+
+      async function render() {
+        const container = document.getElementById("cart-list");
+        const empty = document.getElementById("empty-cart");
+        const cart = loadCart();
+        container.innerHTML = "";
+        if (!cart.length) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+
+        const table = document.createElement("table");
+        table.className = "prod-table";
+        const thead = document.createElement("thead");
+        thead.innerHTML = "<tr><th>画像</th><th>商品名</th><th>単価</th><th>数量</th><th>小計</th><th>操作</th></tr>";
+        table.appendChild(thead);
+        const tbody = document.createElement("tbody");
+
+        for (const item of cart) {
+          const tr = document.createElement("tr");
+          const tdImg = document.createElement("td");
+          const img = document.createElement("img");
+          img.className = "prod-thumb-small";
+          tdImg.appendChild(img);
+          const products = loadProds();
+          const p = products.find((x) => x.id === item.id) || {};
+          if (p.imageId) {
+            const url = await ImageDB.getURL(p.imageId).catch(() => null);
+            if (url) img.src = url;
+          } else if (p.image) img.src = p.image;
+
+          const tdName = document.createElement("td");
+          tdName.textContent = item.name || p.name || "";
+
+          const tdPrice = document.createElement("td");
+          tdPrice.textContent = "¥" + (item.price || p.price || 0);
+
+          const tdQty = document.createElement("td");
+          const inputQty = document.createElement("input");
+          inputQty.type = "number";
+          inputQty.min = 1;
+          inputQty.value = item.qty;
+          inputQty.style.width = "64px";
+          tdQty.appendChild(inputQty);
+
+          const tdSub = document.createElement("td");
+          tdSub.textContent = "¥" + (Number(item.qty) * Number(item.price || p.price || 0));
+
+          const tdOps = document.createElement("td");
+          const btnUpdate = document.createElement("button");
+          btnUpdate.className = "btn-action";
+          btnUpdate.textContent = "更新";
+          btnUpdate.addEventListener("click", () => {
+            const q = Number(inputQty.value) || 1;
+            item.qty = q;
+            saveCart(cart);
+            render();
+          });
+          const btnRemove = document.createElement("button");
+          btnRemove.className = "btn-delete";
+          btnRemove.textContent = "削除";
+          btnRemove.addEventListener("click", () => {
+            if (!confirm("この商品をカートから削除しますか？")) return;
+            const arr = loadCart().filter((c) => c.id !== item.id);
+            saveCart(arr);
+            render();
+          });
+          tdOps.appendChild(btnUpdate);
+          tdOps.appendChild(btnRemove);
+
+          tr.appendChild(tdImg);
+          tr.appendChild(tdName);
+          tr.appendChild(tdPrice);
+          tr.appendChild(tdQty);
+          tr.appendChild(tdSub);
+          tr.appendChild(tdOps);
+          tbody.appendChild(tr);
+        }
+
+        table.appendChild(tbody);
+        container.appendChild(table);
+
+        // チェックアウトボタン
+        const checkout = document.createElement("div");
+        checkout.style.marginTop = "12px";
+        const btn = document.createElement("button");
+        btn.className = "btn-login";
+        btn.textContent = "購入手続き（チェックアウト）";
+        btn.addEventListener("click", () => doCheckout());
+        checkout.appendChild(btn);
+        container.appendChild(checkout);
+      }
+
+      function doCheckout() {
+        const cart = loadCart();
+        if (!cart.length) return alert("カートに商品がありません。");
+
+        // 最新の在庫情報で再検証（複数タブ競合への簡易対策）
+        const latestProducts = loadProds();
+        const insufficient = [];
+        for (const c of cart) {
+          const p = latestProducts.find((x) => x.id === c.id);
+          if (!p) {
+            insufficient.push(`${c.name} が見つかりません`);
+            continue;
+          }
+          if (Number(p.stock) < Number(c.qty)) {
+            insufficient.push(`${c.name} の在庫が不足しています（残: ${p.stock}）`);
+          }
+        }
+        if (insufficient.length) {
+          alert("購入できません:\n" + insufficient.join("\n"));
+          return;
+        }
+
+        try {
+          // 在庫を減らす（最新配列を直接更新してから保存）
+          for (const c of cart) {
+            const p = latestProducts.find((x) => x.id === c.id);
+            p.stock = Number(p.stock) - Number(c.qty);
+          }
+          localStorage.setItem(prodKey, JSON.stringify(latestProducts));
+
+          // 注文作成
+          const user = sessionStorage.getItem("userID") || "ゲスト";
+          const ordersRaw = localStorage.getItem(ordersKey) || "[]";
+          const orders = JSON.parse(ordersRaw);
+          const order = {
+            id: Date.now(),
+            customer: user,
+            items: cart.map((c) => ({ id: c.id, name: c.name, price: c.price, qty: c.qty })),
+            total: cart.reduce((s, c) => s + Number(c.price) * Number(c.qty), 0),
+            status: "pending",
+            createdAt: Date.now(),
+          };
+          orders.unshift(order);
+          localStorage.setItem(ordersKey, JSON.stringify(orders));
+
+          // カートをクリア
+          saveCart([]);
+          alert("購入が完了しました。注文一覧へ移動します。");
+          location.href = "tyuumonitiran.html";
+        } catch (err) {
+          console.error(err);
+          alert("購入処理中にエラーが発生しました。もう一度お試しください。");
+        }
+      }
+
+      render();
+    </script>
+    <script src="auth.js"></script>
+  </body>
+</html>

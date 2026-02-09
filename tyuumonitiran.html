@@ -12,6 +12,7 @@
         <div class="nav-inner">
           <a href="shouhintouroku.html">商品登録</a>
           <a href="shouhinitiran.html">商品一覧</a>
+          <a href="cart.html">カート</a>
           <a href="tyuumonitiran.html">注文一覧</a>
         </div>
       </nav>
@@ -45,6 +46,14 @@
     </div>
 
     <script>
+      // 管理ページ：ログイン必須
+      (function requireLogin() {
+        const id = sessionStorage.getItem("userID");
+        if (!id) {
+          location.href = "login.html";
+        }
+      })();
+
       const key = "orders";
       const pKey = "products";
       function load() {

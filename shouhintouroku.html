@@ -12,6 +12,7 @@
         <div class="nav-inner">
           <a href="shouhintouroku.html">商品登録</a>
           <a href="shouhinitiran.html">商品一覧</a>
+          <a href="cart.html">カート</a>
           <a href="tyuumonitiran.html">注文一覧</a>
         </div>
       </nav>
@@ -97,75 +98,155 @@
         </form>
       </div>
     </div>
+        <script src="idb-images.js"></script>
+        <script>
+          // 管理ページ：ログイン必須
+          (function requireLogin() {
+            const id = sessionStorage.getItem("userID");
+            if (!id) {
+              location.href = "login.html";
+            }
+          })();
+        </script>
+        <script>
+          // 画像プレビュー（ファイルは直接保存せず、IndexedDB に格納）
+          const imageInput = document.getElementById("image");
+          const preview = document.getElementById("preview");
+          let selectedFile = null;
+          let editingId = null;
 
-    <script>
-      // 画像プレビュー
-      const imageInput = document.getElementById("image");
-      const preview = document.getElementById("preview");
+          function q(selector) {
+            return document.querySelector(selector);
+          }
 
-      imageInput &&
-        imageInput.addEventListener("change", (e) => {
-          preview.innerHTML = "";
-          const file = e.target.files && e.target.files[0];
-          if (!file) return;
-          if (!file.type.startsWith("image/")) return;
-          const img = document.createElement("img");
-          img.style.maxWidth = "100%";
-          img.style.maxHeight = "200px";
-          img.alt = "image preview";
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            img.src = ev.target.result;
-          };
-          reader.readAsDataURL(file);
-          preview.appendChild(img);
-        });
+          // ユーティリティ: URL のクエリパラメータを取得
+          function getParam(name) {
+            const params = new URLSearchParams(location.search);
+            return params.get(name);
+          }
 
-      // フォームをローカルに保存して一覧へリダイレクト
-      const form = document.querySelector(".product-form");
+          // 編集モード判定
+          editingId = getParam("id");
 
-      function fileToDataURL(file) {
-        return new Promise((resolve, reject) => {
-          if (!file) return resolve(null);
-          const r = new FileReader();
-          r.onload = () => resolve(r.result);
-          r.onerror = reject;
-          r.readAsDataURL(file);
-        });
-      }
+          async function loadForEdit(id) {
+            if (!id) return;
+            const key = "products";
+            const arr = JSON.parse(localStorage.getItem(key) || "[]");
+            const p = arr.find((x) => String(x.id) === String(id));
+            if (!p) return;
+            document.getElementById("name").value = p.name || "";
+            document.getElementById("category").value = p.category || "";
+            document.getElementById("price").value = p.price || 0;
+            document.getElementById("stock").value = p.stock || 0;
+            document.getElementById("description").value = p.description || "";
+            // プレビュー: 画像が imageId で保存されている場合は取得
+            preview.innerHTML = "";
+            if (p.imageId) {
+              const url = await ImageDB.getURL(p.imageId).catch(() => null);
+              if (url) {
+                const img = document.createElement("img");
+                img.src = url;
+                img.alt = p.name || "preview";
+                img.style.maxWidth = "100%";
+                img.style.maxHeight = "200px";
+                preview.appendChild(img);
+              }
+            } else if (p.image) {
+              // 旧方式の base64 を保持していた場合
+              const img = document.createElement("img");
+              img.src = p.image;
+              img.alt = p.name || "preview";
+              img.style.maxWidth = "100%";
+              img.style.maxHeight = "200px";
+              preview.appendChild(img);
+            }
+          }
 
-      form &&
-        form.addEventListener("submit", async (ev) => {
-          ev.preventDefault();
-          const name = document.getElementById("name").value.trim();
-          const category = document.getElementById("category").value;
-          const price = Number(document.getElementById("price").value) || 0;
-          const stock = Number(document.getElementById("stock").value) || 0;
-          const description = document
-            .getElementById("description")
-            .value.trim();
-          const file = document.getElementById("image").files[0];
-          const imageData = await fileToDataURL(file);
+          imageInput &&
+            imageInput.addEventListener("change", (e) => {
+              preview.innerHTML = "";
+              const file = e.target.files && e.target.files[0];
+              selectedFile = file || null;
+              if (!file) return;
+              if (!file.type.startsWith("image/")) return;
+              const img = document.createElement("img");
+              img.style.maxWidth = "100%";
+              img.style.maxHeight = "200px";
+              img.alt = "image preview";
+              img.src = URL.createObjectURL(file);
+              preview.appendChild(img);
+            });
 
-          const product = {
-            id: Date.now(),
-            name,
-            category,
-            price,
-            stock,
-            description,
-            image: imageData,
-          };
+          // フォーム送信（新規登録 or 編集）
+          const form = document.querySelector(".product-form");
+          form &&
+            form.addEventListener("submit", async (ev) => {
+              ev.preventDefault();
+              const name = document.getElementById("name").value.trim();
+              const category = document.getElementById("category").value;
+              const price = Number(document.getElementById("price").value) || 0;
+              const stock = Number(document.getElementById("stock").value) || 0;
+              const description = document
+                .getElementById("description")
+                .value.trim();
 
-          const key = "products";
-          const list = JSON.parse(localStorage.getItem(key) || "[]");
-          list.unshift(product);
-          localStorage.setItem(key, JSON.stringify(list));
+              const key = "products";
+              const list = JSON.parse(localStorage.getItem(key) || "[]");
 
-          // 登録後は商品登録ページに戻る
-          location.href = "shouhintouroku.html";
-        });
-    </script>
-    <script src="auth.js"></script>
+              // 画像を IndexedDB に保存すると ID が得られる
+              let imageId = null;
+              if (selectedFile) {
+                try {
+                  imageId = await ImageDB.saveImage(selectedFile);
+                } catch (err) {
+                  console.error(err);
+                }
+              }
+
+              if (editingId) {
+                // 更新
+                const idx = list.findIndex((p) => String(p.id) === String(editingId));
+                if (idx !== -1) {
+                  const existing = list[idx];
+                  const oldImageId = existing.imageId || null;
+                  existing.name = name;
+                  existing.category = category;
+                  existing.price = price;
+                  existing.stock = stock;
+                  existing.description = description;
+                  if (imageId) existing.imageId = imageId;
+                  list[idx] = existing;
+                  localStorage.setItem(key, JSON.stringify(list));
+                  // 画像を差し替えた場合、古い imageId を削除しておく
+                  if (imageId && oldImageId && oldImageId !== imageId) {
+                    ImageDB.deleteImage(oldImageId).catch(() => {});
+                  }
+                }
+              } else {
+                const product = {
+                  id: Date.now(),
+                  name,
+                  category,
+                  price,
+                  stock,
+                  description,
+                  imageId: imageId || null,
+                };
+                list.unshift(product);
+                localStorage.setItem(key, JSON.stringify(list));
+              }
+
+              // 登録後は商品一覧へ移動
+              location.href = "shouhinitiran.html";
+            });
+
+          // DOMContentLoaded で編集モードの読み込み
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", () => loadForEdit(editingId));
+          } else {
+            loadForEdit(editingId);
+          }
+        </script>
+        <script src="auth.js"></script>
   </body>
 </html>
